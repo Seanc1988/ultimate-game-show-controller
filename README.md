@@ -1,11 +1,8 @@
-# Public Phone Controller — Version 4.3
+# GitHub Controller V4.4
 
-Upload **both** `index.html` and `peerjs.min.js` to the root of the existing GitHub Pages repository:
+Upload these two files to the root of the existing controller repository:
 
-`https://github.com/Seanc1988/ultimate-game-show-controller`
+- `index.html`
+- `peerjs.min.js`
 
-Do not upload the full local game package to that repository. In GitHub, replace the old `index.html`, replace/add `peerjs.min.js`, then confirm Pages is serving the `main` branch root. The controller URL used by the local game is:
-
-`https://seanc1988.github.io/ultimate-game-show-controller/`
-
-This controller package includes reconnect handling, the contestant pool, buzz/spin controls, bonus cards, Wild Card control, puzzle preview, and contestant name/photo editing.
+Replace the previous copies and commit the change. The full local game does not belong in the controller repository.
