@@ -1,8 +1,5 @@
-# GitHub Controller V4.4
+# Ultimate Game Show Controller V4.5
 
-Upload these two files to the root of the existing controller repository:
+Upload all three files in this folder to the root of the public GitHub Pages controller repository. Keep `index.html` and `peerjs.min.js` beside each other. Do not upload only the HTML file.
 
-- `index.html`
-- `peerjs.min.js`
-
-Replace the previous copies and commit the change. The full local game does not belong in the controller repository.
+This controller includes the persistent Reconnect button, toss-up green/red/lockout feedback, and bonus-card reconnection recovery used by the V4.5 host game.
