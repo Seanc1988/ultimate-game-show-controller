@@ -1,4 +1,4 @@
-# Ultimate Game Show Controller V4.9.1
+# Ultimate Game Show Controller V4.9.2
 
 Upload all three files in this folder to the root of the public GitHub Pages controller repository. Keep `index.html` and `peerjs.min.js` beside each other. Do not upload only the HTML file.
 
