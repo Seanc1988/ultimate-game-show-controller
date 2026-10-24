@@ -3,6 +3,15 @@
   const $=id=>document.getElementById(id),q=new URLSearchParams(location.search);
   const room=(q.get('room')||'').toUpperCase();let sid=q.get('sid')||'';
   let peer=null,conn=null,socket=null,joined=false,avatar='⭐',lastState=null,retry=null,attempt=0,joinTimer=null,peerConnectTimer=null,pendingJoin=null,forcedStop=false;
+  const BATTLE_RTC={iceServers:[
+    {urls:'stun:stun.relay.metered.ca:80'},
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'turn:global.relay.metered.ca:80',username:'ba88079176616565ef57f408',credential:'2sorAbF4hI8eMjGO'},
+    {urls:'turn:global.relay.metered.ca:80?transport=tcp',username:'ba88079176616565ef57f408',credential:'2sorAbF4hI8eMjGO'},
+    {urls:'turn:global.relay.metered.ca:443',username:'ba88079176616565ef57f408',credential:'2sorAbF4hI8eMjGO'},
+    {urls:'turns:global.relay.metered.ca:443?transport=tcp',username:'ba88079176616565ef57f408',credential:'2sorAbF4hI8eMjGO'}
+  ]};
   const leet={0:'o',1:'i',2:'z',3:'e',4:'a',5:'s',6:'g',7:'t',8:'b',9:'g'};
   const blocked=['nigger','nigga','kike','spic','wetback','chink','gook','faggot','tranny','coon','raghead','whitepower','heilhitler','killall','rape','rapist','pedophile','childporn','fuckkids'];
   const clean=v=>String(v||'').replace(/[<>\r\n]/g,'').replace(/\s+/g,' ').trim().slice(0,30);
@@ -79,7 +88,7 @@
   }
   function connectPeer(){
     clearTimeout(retry);clearTimeout(peerConnectTimer);try{peer?.destroy()}catch(_){}$('reconnect').classList.add('hidden');status('Connecting to the host…');
-    peer=new Peer(undefined,{debug:0});peer.on('open',()=>{conn=peer.connect('stp-battle-'+room,{reliable:true,serialization:'json'});peerConnectTimer=setTimeout(()=>{if(!conn?.open){try{peer?.destroy()}catch(_){}reconnect()}},8000);conn.on('open',()=>{clearTimeout(peerConnectTimer);transportReady()});conn.on('data',handle);conn.on('close',reconnect);conn.on('error',reconnect)});peer.on('disconnected',reconnect);peer.on('error',reconnect);
+    peer=new Peer(undefined,{debug:0,config:BATTLE_RTC});peer.on('open',()=>{conn=peer.connect('stp-battle-'+room,{reliable:true,serialization:'json'});peerConnectTimer=setTimeout(()=>{if(!conn?.open){try{peer?.destroy()}catch(_){}reconnect()}},12000);conn.on('open',()=>{clearTimeout(peerConnectTimer);transportReady()});conn.on('data',handle);conn.on('close',reconnect);conn.on('error',reconnect)});peer.on('disconnected',reconnect);peer.on('error',reconnect);
   }
   function connect(){
     if(!room){status('Scan the Battle Royale QR code to connect.');return}
