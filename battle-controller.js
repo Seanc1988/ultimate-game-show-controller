@@ -12,6 +12,7 @@
     {urls:'turn:global.relay.metered.ca:443',username:'ba88079176616565ef57f408',credential:'2sorAbF4hI8eMjGO'},
     {urls:'turns:global.relay.metered.ca:443?transport=tcp',username:'ba88079176616565ef57f408',credential:'2sorAbF4hI8eMjGO'}
   ]};
+  const THEME_COLORS={classic:['#1640a4','#76115e','#22d9ff','#ffd34c'],hollywood:['#7d1026','#16070b','#f4d35e','#ff4d6d'],halloween:['#8b3b00','#35105a','#ff7b00','#b56cff'],christmas:['#087f3f','#751018','#ec1c24','#f6d55c'],easter:['#9d77d5','#ff8fc7','#8ce6ff','#fff08c'],winter:['#2879a7','#061326','#9de8ff','#fff'],fall:['#8d3c18','#3b1305','#e76f19','#f7c948'],summer:['#0aa56b','#056f9c','#00d9ff','#ffde3b'],beach:['#078f9c','#064a6b','#31e5e0','#ffd166'],patriotic:['#174e9b','#8c1520','#e63946','#f1faee'],vegas:['#7d163e','#22105e','#ffd60a','#ff2f7f']};
   const leet={0:'o',1:'i',2:'z',3:'e',4:'a',5:'s',6:'g',7:'t',8:'b',9:'g'};
   const blocked=['nigger','nigga','kike','spic','wetback','chink','gook','faggot','tranny','coon','raghead','whitepower','heilhitler','killall','rape','rapist','pedophile','childporn','fuckkids'];
   const clean=v=>String(v||'').replace(/[<>\r\n]/g,'').replace(/\s+/g,' ').trim().slice(0,30);
@@ -26,7 +27,9 @@
   }
   function fmt(ms){return Number.isFinite(ms)&&ms>=0?(ms/1000).toFixed(ms<10000?2:1)+'s':'—'}
   function show(id){['join-card','play-card','rank-card','eliminated-card'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
-  function puzzle(text){$('puzzle').innerHTML=[...(text||'')].map(ch=>ch===' '?'<span class="char space"></span>':ch==='_'?'<span class="char mask">•</span>':/[A-Z0-9]/.test(ch)?`<span class="char">${ch}</span>`:`<span class="char punct">${ch}</span>`).join('')}
+  function fitPuzzleLines(text,maxCols=14,maxRows=4){const words=String(text||'').trim().split(/\s+/).filter(Boolean);if(words.some(word=>word.length>maxCols))return[];const lines=[];let line='';for(const word of words){if(!line)line=word;else if(`${line} ${word}`.length<=maxCols)line+=` ${word}`;else{lines.push(line);line=word}}if(line)lines.push(line);return lines.slice(0,maxRows)}
+  function puzzle(text){const lines=fitPuzzleLines(text),topPad=Math.max(0,Math.floor((4-lines.length)/2));let html='';for(let row=0;row<4;row++){const line=lines[row-topPad]||'',leftPad=Math.max(0,Math.floor((14-line.length)/2));html+='<div class="puzzle-row">';for(let col=0;col<14;col++){const ch=line[col-leftPad]||'';if(!ch||ch===' ')html+='<span class="char inactive"></span>';else if(ch==='_')html+='<span class="char mask"></span>';else if(/[A-Z0-9]/.test(ch))html+=`<span class="char">${safe(ch)}</span>`;else html+=`<span class="char punct">${safe(ch)}</span>`}html+='</div>'}$('puzzle').innerHTML=html}
+  function applyTheme(key){const colors=THEME_COLORS[key]||THEME_COLORS.classic;document.documentElement.style.setProperty('--theme-a',colors[0]);document.documentElement.style.setProperty('--theme-b',colors[1]);document.documentElement.style.setProperty('--cyan',colors[2]);document.documentElement.style.setProperty('--gold',colors[3])}
   function stats(s,prefix=''){const pre=prefix?prefix+'-':'';$(pre+'score').textContent=Number(s.score||0).toLocaleString();$(pre+'solved').textContent=s.puzzlesSolved||0;$(pre+'fastest').textContent=fmt(s.fastestMs)}
   function saveProfile(name){try{localStorage.setItem('stpBattleName',name);if(!String(avatar).startsWith('data:'))localStorage.setItem('stpBattleAvatar',avatar)}catch(_){}}
   function armJoinTimer(){clearTimeout(joinTimer);joinTimer=setTimeout(()=>{if(!joined){$('join').disabled=false;status('The host did not answer. Tap Reconnect, then try Join again.');$('reconnect').classList.remove('hidden')}},7000)}
@@ -34,7 +37,7 @@
     lastState=s;if(s.sessionId&&sid&&s.sessionId!==sid)return;
     if(s.eliminated){show('eliminated-card');status('You are now spectating.');return}
     if(s.solved){show('rank-card');$('rank').textContent='#'+s.rank;$('points').textContent='+'+Number(s.points).toLocaleString()+' POINTS';stats(s,'rank');status('Correct answer submitted!');return}
-    show('play-card');$('category').textContent=s.category||'GET READY';puzzle(s.masked);stats(s);$('solve-form').classList.toggle('hidden',s.phase!=='active'||!s.eligible);
+    show('play-card');applyTheme(s.visualTheme);$('category').textContent=s.category||'GET READY';puzzle(s.masked);stats(s);$('solve-form').classList.toggle('hidden',s.phase!=='active'||!s.eligible);
     if(s.phase==='active'&&s.eligible)status('Solve it! Submit as many guesses as you need.');
     else if(s.phase==='active'&&!s.eligible)status('You joined during this puzzle. You can play the next one.');
     else if(s.phase==='results')status('Puzzle complete — check the leaderboard.');
@@ -102,6 +105,8 @@
   $('photo').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;avatar=await resizePhoto(f);$('preview').innerHTML=`<img src="${avatar}" alt="Your photo">`};
   $('join').onclick=sendJoin;
   $('solve-form').onsubmit=e=>{e.preventDefault();const answer=$('answer').value.trim();if(!answer)return;if(!send({type:'submit',answer}))return reconnect();$('feedback').textContent='Checking…'};
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;let recognition=null;
+  $('voice-answer').onclick=()=>{if(!SpeechRecognition){$('feedback').textContent='Voice entry is not available in this browser. Tap the microphone on your phone keyboard instead.';setTimeout(()=>$('feedback').textContent='',3500);return}if(recognition){try{recognition.stop()}catch(_){}return}recognition=new SpeechRecognition();recognition.lang='en-US';recognition.interimResults=false;recognition.maxAlternatives=1;$('voice-answer').classList.add('listening');$('feedback').textContent='Listening… say the complete puzzle.';recognition.onresult=event=>{$('answer').value=String(event.results?.[0]?.[0]?.transcript||'').toUpperCase();$('answer').focus();$('feedback').textContent='Voice answer ready — check it, then tap SOLVE.'};recognition.onerror=()=>{$('feedback').textContent='I could not hear that. Try again or use the keyboard microphone.'};recognition.onend=()=>{recognition=null;$('voice-answer').classList.remove('listening');setTimeout(()=>{if($('feedback').textContent.startsWith('Voice answer ready'))return;$('feedback').textContent=''},2500)};try{recognition.start()}catch(_){recognition=null;$('voice-answer').classList.remove('listening')}};
   $('reconnect').onclick=()=>{if(socket){socket.disconnect();socket.connect()}else connectPeer()};
   setInterval(()=>{if(joined)send({type:'ping',ts:Date.now()})},8000);connect();
 })();
