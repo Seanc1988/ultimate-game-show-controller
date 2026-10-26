@@ -2,7 +2,7 @@
   'use strict';
   const $=id=>document.getElementById(id),q=new URLSearchParams(location.search);
   const room=(q.get('room')||'').toUpperCase();let sid=q.get('sid')||'';
-  let peer=null,conn=null,socket=null,joined=false,avatar='⭐',lastState=null,retry=null,attempt=0,joinTimer=null,peerConnectTimer=null,pendingJoin=null,forcedStop=false;
+  let peer=null,conn=null,socket=null,joined=false,avatar='⭐',lastState=null,lastRoundKey='',retry=null,attempt=0,joinTimer=null,peerConnectTimer=null,pendingJoin=null,forcedStop=false;
   const BATTLE_RTC={iceServers:[
     {urls:'stun:stun.relay.metered.ca:80'},
     {urls:'stun:stun.l.google.com:19302'},
@@ -26,19 +26,24 @@
     return false;
   }
   function fmt(ms){return Number.isFinite(ms)&&ms>=0?(ms/1000).toFixed(ms<10000?2:1)+'s':'—'}
-  function show(id){['join-card','play-card','rank-card','eliminated-card'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
+  function show(id){['join-card','play-card','rank-card','results-card','eliminated-card'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
   function fitPuzzleLines(text,maxCols=14,maxRows=4){const words=String(text||'').trim().split(/\s+/).filter(Boolean);if(words.some(word=>word.length>maxCols))return[];const lines=[];let line='';for(const word of words){if(!line)line=word;else if(`${line} ${word}`.length<=maxCols)line+=` ${word}`;else{lines.push(line);line=word}}if(line)lines.push(line);return lines.slice(0,maxRows)}
-  function puzzle(text){const lines=fitPuzzleLines(text),topPad=Math.max(0,Math.floor((4-lines.length)/2));let html='';for(let row=0;row<4;row++){const line=lines[row-topPad]||'',leftPad=Math.max(0,Math.floor((14-line.length)/2));html+='<div class="puzzle-row">';for(let col=0;col<14;col++){const ch=line[col-leftPad]||'';if(!ch||ch===' ')html+='<span class="char inactive"></span>';else if(ch==='_')html+='<span class="char mask"></span>';else if(/[A-Z0-9]/.test(ch))html+=`<span class="char">${safe(ch)}</span>`;else html+=`<span class="char punct">${safe(ch)}</span>`}html+='</div>'}$('puzzle').innerHTML=html}
+  function puzzle(text,cells){if(Array.isArray(cells)&&cells.length===4){$('puzzle').innerHTML=cells.map(row=>'<div class="puzzle-row">'+row.map(cell=>`<span class="char ${cell.kind==='hidden'?'mask':safe(cell.kind||'inactive')}">${cell.kind==='revealed'||cell.kind==='punct'?safe(cell.ch):''}</span>`).join('')+'</div>').join('');return}const lines=fitPuzzleLines(text),topPad=Math.max(0,Math.floor((4-lines.length)/2));let html='';for(let row=0;row<4;row++){const line=lines[row-topPad]||'',leftPad=Math.max(0,Math.floor((14-line.length)/2));html+='<div class="puzzle-row">';for(let col=0;col<14;col++){const ch=line[col-leftPad]||'';if(!ch||ch===' ')html+='<span class="char inactive"></span>';else if(ch==='_')html+='<span class="char mask"></span>';else if(/[A-Z0-9]/.test(ch))html+=`<span class="char">${safe(ch)}</span>`;else html+=`<span class="char punct">${safe(ch)}</span>`}html+='</div>'}$('puzzle').innerHTML=html}
   function applyTheme(key){const colors=THEME_COLORS[key]||THEME_COLORS.classic;document.documentElement.style.setProperty('--theme-a',colors[0]);document.documentElement.style.setProperty('--theme-b',colors[1]);document.documentElement.style.setProperty('--cyan',colors[2]);document.documentElement.style.setProperty('--gold',colors[3])}
   function stats(s,prefix=''){const pre=prefix?prefix+'-':'';$(pre+'score').textContent=Number(s.score||0).toLocaleString();$(pre+'solved').textContent=s.puzzlesSolved||0;$(pre+'fastest').textContent=fmt(s.fastestMs)}
   function saveProfile(name){try{localStorage.setItem('stpBattleName',name);if(!String(avatar).startsWith('data:'))localStorage.setItem('stpBattleAvatar',avatar)}catch(_){}}
+  function leaderRows(items,type){return (items||[]).length?(items||[]).map(p=>`<div class="phone-leader-row"><b>#${p.rank}</b><span>${safe(p.name)}</span><strong>${type==='round'?(p.solved?fmt(p.timeMs):'—'):Number(p.score||0).toLocaleString()}</strong></div>`).join(''):'<div class="phone-leader-empty">No results yet.</div>'}
+  function showLeaderboard(type){if(!lastState)return;document.querySelectorAll('[data-board]').forEach(b=>b.classList.toggle('active',b.dataset.board===type));const items=type==='round'?lastState.roundBoard:type==='alltime'?lastState.allTimeBoard:lastState.gameBoard;$('phone-leader-title').textContent=type==='round'?'THIS ROUND':type==='alltime'?'ALL-TIME LEADERS':'CURRENT GAME';$('phone-leader-list').innerHTML=leaderRows(items,type)}
   function armJoinTimer(){clearTimeout(joinTimer);joinTimer=setTimeout(()=>{if(!joined){$('join').disabled=false;status('The host did not answer. Tap Reconnect, then try Join again.');$('reconnect').classList.remove('hidden')}},7000)}
   function render(s){
     lastState=s;if(s.sessionId&&sid&&s.sessionId!==sid)return;
+    if(s.roundKey&&s.roundKey!==lastRoundKey){lastRoundKey=s.roundKey;$('answer').value='';$('feedback').textContent=''}
+    if(['results','finished'].includes(s.phase)){show('results-card');applyTheme(s.visualTheme);$('your-place').textContent='#'+Number(s.gamePlace||1);$('your-score').textContent=Number(s.score||0).toLocaleString()+' POINTS';showLeaderboard(s.phase==='results'?'round':'game');status(s.phase==='finished'?'Game complete — view the final standings.':'Round complete — here is how everyone placed.');return}
     if(s.eliminated){show('eliminated-card');status('You are now spectating.');return}
     if(s.solved){show('rank-card');$('rank').textContent='#'+s.rank;$('points').textContent='+'+Number(s.points).toLocaleString()+' POINTS';stats(s,'rank');status('Correct answer submitted!');return}
-    show('play-card');applyTheme(s.visualTheme);$('category').textContent=s.category||'GET READY';puzzle(s.masked);stats(s);$('solve-form').classList.toggle('hidden',s.phase!=='active'||!s.eligible);
-    if(s.phase==='active'&&s.eligible)status('Solve it! Submit as many guesses as you need.');
+    show('play-card');applyTheme(s.visualTheme);$('category').textContent=s.category||'GET READY';puzzle(s.masked,s.board);stats(s);$('solve-form').classList.toggle('hidden',!['active','grace'].includes(s.phase)||!s.eligible);
+    if(s.phase==='grace'&&s.eligible)status('Final chance — submit before the 7 seconds end!');
+    else if(s.phase==='active'&&s.eligible)status('Solve it! Submit as many guesses as you need.');
     else if(s.phase==='active'&&!s.eligible)status('You joined during this puzzle. You can play the next one.');
     else if(s.phase==='results')status('Puzzle complete — check the leaderboard.');
     else if(s.phase==='finished')status('Game complete! Wait for the host to open the next battle.');
@@ -54,7 +59,8 @@
     if(!d||typeof d!=='object')return;
     if(d.type==='joined'){clearTimeout(joinTimer);joined=true;pendingJoin=null;if(d.sessionId)sid=d.sessionId;try{localStorage.setItem('stpBattleJoinedSession',sid);history.replaceState(null,'',`${location.pathname}?room=${encodeURIComponent(room)}&sid=${encodeURIComponent(sid)}`)}catch(_){}$('join').disabled=false;show('play-card');status(`Welcome, ${d.name}! Waiting for the host.`);send({type:'request-state'});return}
     if(d.type==='state')return render(d);
-    if(d.type==='correct'){navigator.vibrate?.([120,60,180]);return}
+    if(d.type==='correct'){navigator.vibrate?.([120,60,180]);document.body.classList.add('correct-flash');setTimeout(()=>document.body.classList.remove('correct-flash'),1100);return}
+    if(d.type==='winner'){navigator.vibrate?.([250,90,250,90,500]);document.body.classList.add('winner-flash');setTimeout(()=>document.body.classList.remove('winner-flash'),5000);return}
     if(d.type==='rejected'){$('feedback').textContent=d.reason||'Try again.';if(d.clear){$('answer').value='';$('answer').focus();navigator.vibrate?.(90)}setTimeout(()=>$('feedback').textContent='',1600);return}
     if(d.type==='name-rejected'||d.type==='join-denied'){clearTimeout(joinTimer);joined=false;pendingJoin=null;$('join').disabled=false;show('join-card');status(d.reason||'That name cannot be used.');return}
     if(d.type==='renamed'){try{localStorage.setItem('stpBattleName',d.name);$('name').value=d.name}catch(_){}status(`The host changed your name to ${d.name}.`);return}
@@ -108,5 +114,6 @@
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;let recognition=null;
   $('voice-answer').onclick=()=>{if(!SpeechRecognition){$('feedback').textContent='Voice entry is not available in this browser. Tap the microphone on your phone keyboard instead.';setTimeout(()=>$('feedback').textContent='',3500);return}if(recognition){try{recognition.stop()}catch(_){}return}recognition=new SpeechRecognition();recognition.lang='en-US';recognition.interimResults=false;recognition.maxAlternatives=1;$('voice-answer').classList.add('listening');$('feedback').textContent='Listening… say the complete puzzle.';recognition.onresult=event=>{$('answer').value=String(event.results?.[0]?.[0]?.transcript||'').toUpperCase();$('answer').focus();$('feedback').textContent='Voice answer ready — check it, then tap SOLVE.'};recognition.onerror=()=>{$('feedback').textContent='I could not hear that. Try again or use the keyboard microphone.'};recognition.onend=()=>{recognition=null;$('voice-answer').classList.remove('listening');setTimeout(()=>{if($('feedback').textContent.startsWith('Voice answer ready'))return;$('feedback').textContent=''},2500)};try{recognition.start()}catch(_){recognition=null;$('voice-answer').classList.remove('listening')}};
   $('reconnect').onclick=()=>{if(socket){socket.disconnect();socket.connect()}else connectPeer()};
+  document.querySelectorAll('[data-board]').forEach(button=>button.onclick=()=>showLeaderboard(button.dataset.board));
   setInterval(()=>{if(joined)send({type:'ping',ts:Date.now()})},8000);connect();
 })();
