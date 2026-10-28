@@ -15,6 +15,7 @@
   const THEME_COLORS={classic:['#1640a4','#76115e','#22d9ff','#ffd34c'],hollywood:['#7d1026','#16070b','#f4d35e','#ff4d6d'],halloween:['#8b3b00','#35105a','#ff7b00','#b56cff'],christmas:['#087f3f','#751018','#ec1c24','#f6d55c'],easter:['#9d77d5','#ff8fc7','#8ce6ff','#fff08c'],winter:['#2879a7','#061326','#9de8ff','#fff'],fall:['#8d3c18','#3b1305','#e76f19','#f7c948'],summer:['#0aa56b','#056f9c','#00d9ff','#ffde3b'],beach:['#078f9c','#064a6b','#31e5e0','#ffd166'],patriotic:['#174e9b','#8c1520','#e63946','#f1faee'],vegas:['#7d163e','#22105e','#ffd60a','#ff2f7f']};
   const leet={0:'o',1:'i',2:'z',3:'e',4:'a',5:'s',6:'g',7:'t',8:'b',9:'g'};
   const blocked=['nigger','nigga','kike','spic','wetback','chink','gook','faggot','tranny','coon','raghead','whitepower','heilhitler','killall','rape','rapist','pedophile','childporn','fuckkids'];
+  const safe=value=>String(value??'').replace(/[<>&"']/g,char=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[char]));
   const clean=v=>String(v||'').replace(/[<>\r\n]/g,'').replace(/\s+/g,' ').trim().slice(0,30);
   const norm=v=>clean(v).toLowerCase().split('').map(c=>leet[c]||c).join('').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
   const token=(()=>{try{let t=localStorage.getItem('stpBattleDeviceToken');if(!t){t=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now();localStorage.setItem('stpBattleDeviceToken',t)}return t}catch(_){return Math.random().toString(36).slice(2)}})();

@@ -1,4 +1,4 @@
-# Ultimate Game Show Controller V5.2.0
+# Ultimate Game Show Controller V5.2.1
 
 Upload all nine files in this folder to the root of the existing public GitHub Pages controller repository: `index.html`, `battle.html`, `battle-controller.js`, `audience.html`, `battle-audience-remote.js`, `peerjs.min.js`, `qrcode.min.js`, `ultimate-game-show-logo.png`, and `README.md`. Replace the older files. Do not upload only the HTML files or add an enclosing folder.
 
