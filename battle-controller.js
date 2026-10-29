@@ -2,7 +2,7 @@
   'use strict';
   const $=id=>document.getElementById(id),q=new URLSearchParams(location.search);
   const room=(q.get('room')||'').toUpperCase();let sid=q.get('sid')||'';
-  let peer=null,conn=null,socket=null,joined=false,avatar='⭐',lastState=null,lastRoundKey='',retry=null,attempt=0,joinTimer=null,peerConnectTimer=null,pendingJoin=null,forcedStop=false;
+  let peer=null,conn=null,socket=null,joined=false,avatar='⭐',lastState=null,lastRoundKey='',retry=null,attempt=0,joinTimer=null,peerConnectTimer=null,pendingJoin=null,forcedStop=false,lastResultRequestAt=0;
   const BATTLE_RTC={iceServers:[
     {urls:'stun:stun.relay.metered.ca:80'},
     {urls:'stun:stun.l.google.com:19302'},
@@ -35,11 +35,12 @@
   function saveProfile(name){try{localStorage.setItem('stpBattleName',name);if(!String(avatar).startsWith('data:'))localStorage.setItem('stpBattleAvatar',avatar)}catch(_){}}
   function leaderRows(items,type){return (items||[]).length?(items||[]).map(p=>`<div class="phone-leader-row"><b>#${p.rank}</b><span>${safe(p.name)}</span><strong>${type==='round'?(p.solved?fmt(p.timeMs):'—'):Number(p.score||0).toLocaleString()}</strong></div>`).join(''):'<div class="phone-leader-empty">No results yet.</div>'}
   function showLeaderboard(type){if(!lastState)return;document.querySelectorAll('[data-board]').forEach(b=>b.classList.toggle('active',b.dataset.board===type));const items=type==='round'?lastState.roundBoard:type==='alltime'?lastState.allTimeBoard:lastState.gameBoard;$('phone-leader-title').textContent=type==='round'?'THIS ROUND':type==='alltime'?'ALL-TIME LEADERS':'CURRENT GAME';$('phone-leader-list').innerHTML=leaderRows(items,type)}
+  function ensureResults(){const now=Date.now();if(now-lastResultRequestAt<2500)return;lastResultRequestAt=now;setTimeout(()=>send({type:'request-state'}),250);setTimeout(()=>send({type:'request-state'}),1400)}
   function armJoinTimer(){clearTimeout(joinTimer);joinTimer=setTimeout(()=>{if(!joined){$('join').disabled=false;status('The host did not answer. Tap Reconnect, then try Join again.');$('reconnect').classList.remove('hidden')}},7000)}
   function render(s){
     lastState=s;if(s.sessionId&&sid&&s.sessionId!==sid)return;
     if(s.roundKey&&s.roundKey!==lastRoundKey){lastRoundKey=s.roundKey;$('answer').value='';$('feedback').textContent=''}
-    if(['results','finished'].includes(s.phase)){show('results-card');applyTheme(s.visualTheme);$('your-place').textContent='#'+Number(s.gamePlace||1);$('your-score').textContent=Number(s.score||0).toLocaleString()+' POINTS';showLeaderboard(s.phase==='results'?'round':'game');status(s.phase==='finished'?'Game complete — view the final standings.':'Round complete — here is how everyone placed.');return}
+    if(['results','finished'].includes(s.phase)){show('results-card');applyTheme(s.visualTheme);$('your-place').textContent='#'+Number(s.gamePlace||1);$('your-score').textContent=Number(s.score||0).toLocaleString()+' POINTS';showLeaderboard(s.phase==='results'?'round':'game');status(s.phase==='finished'?'Game complete — view the final standings.':'Round complete — here is how everyone placed.');if(!(s.gameBoard?.length||s.roundBoard?.length||s.allTimeBoard?.length))ensureResults();return}
     if(s.eliminated){show('eliminated-card');status('You are now spectating.');return}
     if(s.solved){show('rank-card');$('rank').textContent='#'+s.rank;$('points').textContent='+'+Number(s.points).toLocaleString()+' POINTS';stats(s,'rank');status('Correct answer submitted!');return}
     show('play-card');applyTheme(s.visualTheme);$('category').textContent=s.category||'GET READY';puzzle(s.masked,s.board);stats(s);$('solve-form').classList.toggle('hidden',!['active','grace'].includes(s.phase)||!s.eligible);
@@ -48,6 +49,7 @@
     else if(s.phase==='active'&&!s.eligible)status('You joined during this puzzle. You can play the next one.');
     else if(s.phase==='results')status('Puzzle complete — check the leaderboard.');
     else if(s.phase==='finished')status('Game complete! Wait for the host to open the next battle.');
+    else if(s.autoDeadline){const seconds=Math.max(0,Math.ceil((s.autoDeadline-Date.now())/1000));status(`${s.autoLabel||'Starting soon'} ${seconds}`)}
     else status(`Puzzle ${s.round||1} of ${s.roundsTotal||''} — waiting for the host.`);
   }
   function resetForJoin(message,newSid){
@@ -60,8 +62,8 @@
     if(!d||typeof d!=='object')return;
     if(d.type==='joined'){clearTimeout(joinTimer);joined=true;pendingJoin=null;if(d.sessionId)sid=d.sessionId;try{localStorage.setItem('stpBattleJoinedSession',sid);history.replaceState(null,'',`${location.pathname}?room=${encodeURIComponent(room)}&sid=${encodeURIComponent(sid)}`)}catch(_){}$('join').disabled=false;show('play-card');status(`Welcome, ${d.name}! Waiting for the host.`);send({type:'request-state'});return}
     if(d.type==='state')return render(d);
-    if(d.type==='correct'){navigator.vibrate?.([120,60,180]);document.body.classList.add('correct-flash');setTimeout(()=>document.body.classList.remove('correct-flash'),1100);return}
-    if(d.type==='winner'){navigator.vibrate?.([250,90,250,90,500]);document.body.classList.add('winner-flash');setTimeout(()=>document.body.classList.remove('winner-flash'),5000);return}
+    if(d.type==='correct'){navigator.vibrate?.([120,60,180]);document.body.classList.add('correct-flash');setTimeout(()=>document.body.classList.remove('correct-flash'),1100);setTimeout(()=>send({type:'request-state'}),700);setTimeout(()=>send({type:'request-state'}),2400);return}
+    if(d.type==='winner'){navigator.vibrate?.([250,90,250,90,500]);document.body.classList.add('winner-flash');setTimeout(()=>document.body.classList.remove('winner-flash'),5000);setTimeout(()=>send({type:'request-state'}),700);return}
     if(d.type==='rejected'){$('feedback').textContent=d.reason||'Try again.';if(d.clear){$('answer').value='';$('answer').focus();navigator.vibrate?.(90)}setTimeout(()=>$('feedback').textContent='',1600);return}
     if(d.type==='name-rejected'||d.type==='join-denied'){clearTimeout(joinTimer);joined=false;pendingJoin=null;$('join').disabled=false;show('join-card');status(d.reason||'That name cannot be used.');return}
     if(d.type==='renamed'){try{localStorage.setItem('stpBattleName',d.name);$('name').value=d.name}catch(_){}status(`The host changed your name to ${d.name}.`);return}
