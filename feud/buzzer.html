@@ -234,7 +234,9 @@ function scheduleReconnect() {
   }, delay);
 }
 
+let connectGeneration=0;
 function startConnect() {
+  const generation=++connectGeneration;
   if (!activeRoom) {
     setStatus('Tap to enter room code', 'error');
     phaseEl.textContent = 'Scan QR or enter the host room code';
@@ -257,14 +259,18 @@ function startConnect() {
   try{const data=new URLSearchParams(location.hash.slice(1)).get('rtc');if(data){const cfg=JSON.parse(atob(data));if(Array.isArray(cfg.iceServers)&&cfg.iceServers.length<=12)BUZZER_RTC=cfg;}}catch(_){}
   peer = new Peer({ debug: 0, config: BUZZER_RTC });
   const connectingPeer=peer;setTimeout(()=>{if(peer===connectingPeer&&!conn?.open){setStatus("Connection timed out. Check computer internet. Retrying…","error");scheduleReconnect();}},12000);
+  const candidate=peer;
   peer.on('open', () => {
-    conn = peer.connect('feud-' + activeRoom, { reliable: true });
-    conn.on('open', () => {
+    if(generation!==connectGeneration||peer!==candidate)return;
+    const c=candidate.connect('feud-' + activeRoom, { reliable: true });conn=c;
+    c.on('open', () => {
+      if(generation!==connectGeneration||conn!==c)return;
       retries = 0;
       setStatus('Connected', 'connected');
-      conn.send({ type: 'hello', team: myTeam });
+      c.send({ type: 'hello', team: myTeam });
     });
-    conn.on('data', data => {
+    c.on('data', data => {
+      if(generation!==connectGeneration||conn!==c)return;
       if (!data || typeof data !== 'object') return;
       if (data.type === 'state') applyState(data);
       if (data.type === 'fast-money-prompt') showFastPrompt(data);
@@ -272,7 +278,8 @@ function startConnect() {
       if (data.type === 'answer-prompt') showAnswerPrompt(data);
       if (data.type === 'answer-clear') clearFastPrompt();
     });
-    conn.on('close', () => {
+    c.on('close', () => {
+      if(generation!==connectGeneration||conn!==c)return;
       setStatus('Reconnecting...', 'connecting');
       buzzBtn.className = 'btn-buzz disarmed';
       buzzBtn.textContent = 'Reconnecting...';
@@ -280,12 +287,14 @@ function startConnect() {
       phaseEl.textContent = '';
       scheduleReconnect();
     });
-    conn.on('error', () => scheduleReconnect());
+    c.on('error', () => {if(generation===connectGeneration&&conn===c)scheduleReconnect();});
   });
   peer.on('disconnected', () => {
+    if(generation!==connectGeneration||peer!==candidate)return;
     try { peer.reconnect(); } catch (err) { scheduleReconnect(); }
   });
   peer.on('error', err => {
+    if(generation!==connectGeneration||peer!==candidate)return;
     const type = err?.type || 'unknown';
     setStatus('Peer error: ' + type, 'error');
     buzzBtn.className = 'btn-buzz disarmed';
